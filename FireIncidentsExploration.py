@@ -359,12 +359,55 @@ spark.sql("SELECT `NeighborhoodDistrict`, count(`NeighborhoodDistrict`) AS Neigh
 # Catalyst Optimizer: which will take SQL query, or dataframe / dataset and generates logical plan, flows through logical & physical optimization
 # and finally generates RDD and runs code
                             
-                            
-                            
-                            
-                            
-                            
-                            
-                                
+# Note that a SQL Query just returns back a DataFrame
+spark.sql("SELECT `NeighborhoodDistrict`, count(`NeighborhoodDistrict`) AS Neighborhood_Count FROM dfVIEW WHERE year(`CallDateTS`) == '2015' GROUP BY `NeighborhoodDistrict` ORDER BY Neighborhood_Count DESC LIMIT 15")
 
+# The `explain()` method can be called on a DataFrame to understand its logical + physical plans:
 
+spark.sql("SELECT `NeighborhoodDistrict`, count(`NeighborhoodDistrict`) AS Neighborhood_Count FROM dfVIEW WHERE year(`CallDateTS`) == '2015' GROUP BY `NeighborhoodDistrict` ORDER BY Neighborhood_Count DESC LIMIT 15").explain(True)
+# you can see same plan under sparkUI, SQL section    
+                            
+# ***DataFrame Joins                         
+                            
+# **Q-6) What was the primary non-medical reason most people called the fire department from the Tenderloin last year?**
+
+# The "Fire Incidents" data (another dataset )includes a summary of each (non-medical) incident to which the SF Fire Department responded.
+#  https://data.sfgov.org/Public-Safety/Fire-Incidents/wr8u-xric
+# Let's do a join to the Fire Incidents data on the "Incident Number" column:
+
+#  Read the Fire Incidents CSV file into a DataFrame: and cache it 
+
+incidentsDF = spark.read.csv('/mnt/sf_open_data/fire_incidents/Fire_Incidents.csv', header=True, inferSchema=True).withColumnRenamed('Incident Number', 'IncidentNumber').cache()
+incidentsDF.printSchema()
+
+# Materialize the cache
+incidentsDF.count()
+display(incidentsDF.limit(3))
+
+# JOIN both dataset based on common keys
+
+joinedDF = fireServiceDF.join(incidentsDF, fireServiceDF.IncidentNumber == incidentsDF.IncidentNumber)
+display(joinedDF.limit(3))
+
+#Note that the joined DF is only 1.1 million rows b/c we did an inner join (the original Fire Service Calls data had 4+ million rows)
+joinedDF.count()
+joinedDF.filter(year('CallDateTS') == '2015').filter(col('NeighborhoodDistrict') == 'Tenderloin').count()
+joinedDF.filter(year('CallDateTS') == '2015').filter(col('NeighborhoodDistrict') == 'Pacific Heights').count()
+display(joinedDF.filter(year('CallDateTS') == '2015').filter(col('NeighborhoodDistrict') == 'Tenderloin').groupBy('Primary Situation').count().orderBy(desc("count")).limit(10))
+display(joinedDF.filter(year('CallDateTS') == '2015').filter(col('NeighborhoodDistrict') == 'Pacific Heights').groupBy('Primary Situation').count().orderBy(desc("count")).limit(10))
+
+# Most of the calls were False Alarms!
+
+# What do residents of Russian Hill call the fire department for?
+
+display(joinedDF.filter(year('CallDateTS') == '2015').filter(col('NeighborhoodDistrict') == 'Russian Hill').groupBy('Primary Situation').count().orderBy(desc("count")).limit(10))
+
+# ***Convert a Spark DataFrame to a Pandas DataFrame ***
+
+import pandas as pd
+
+pandas2016DF = joinedDF.filter(year('CallDateTS') == '2016').toPandas()
+pandas2016DF.dtypes
+pandas2016DF.head()
+pandas2016DF.describe()                            
+                            
