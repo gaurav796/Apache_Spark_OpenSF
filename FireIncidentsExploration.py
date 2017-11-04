@@ -14,8 +14,7 @@ spark
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, BooleanType
 
 #Using the SparkSession, create a DataFrame from the CSV file by inferring the schema:
-
-df = spark.read.csv('/mnt/sf_open_data/fire_dept_calls_for_service/Fire_Department_Calls_for_Service.csv', header=True, inferSchema=True)
+df = spark.read.csv('C:\Users\Gaurav\Downloads\Fire_Department_Calls_for_Service.csv',header=True,inferSchema=True)
 df
 DataFrame[Call Number: int, Unit ID: string, Incident Number: int, Call Type: string, Call Date: string, Watch Date: string, Received DtTm: string, Entry DtTm: string, Dispatch DtTm: string, Response DtTm: string, On Scene DtTm: string, Transport DtTm: string, Hospital DtTm: string, Call Final Disposition: string, Available DtTm: string, Address: string, City: string, Zipcode of Incident: int, Battalion: string, Station Area: string, Box: string, Original Priority: string, Priority: string, Final Priority: int, ALS Unit: boolean, Call Type Group: string, Number of Alarms: int, Unit Type: string, Unit sequence in call dispatch: int, Fire Prevention District: string, Supervisor District: string, Neighborhooods - Analysis Boundaries: string, Location: string, RowID: string]
 
@@ -145,7 +144,8 @@ df.select('Call Type').distinct().show(35, False)
 |   Train / Rail Fire|     10|
 |Lightning Strike ...|      9|
 +--------------------+-------+
-#Seems like the SF Fire department is called for medical incidents far more than any other type. Note that the above command took about 14 seconds to execute. In an upcoming section, we'll cache the data into memory for up to 100x speed increases.
+#Seems like the SF Fire department is called for medical incidents far more than any other type. Note that the above command took about 14 seconds to execute. 
+#In an upcoming section, we'll cache the data into memory for up to 100x speed increases.
        
        
 # ***Doing Date/Time Analysis*** 
@@ -285,7 +285,86 @@ df.filter(year('CallDateTS') == '2016').filter(dayofyear('CallDateTS') >= 360).g
 +---------------------+-----+
        
 # ***Memory, Caching and write to Parquet*** 
+# The DataFrame is currently comprised of 13 partitions:     
+df.rdd.getNumPartitions()  
        
+# We can reparttion to any other number for example to 6 instead of default 13, which 'll be optimal for processing 
+#and create a temp view out of df
+df.repartition(6).createOrReplaceTempView("dfVIEW");
+spark.catalog.cacheTable("dfVIEW")
+# cache() is lazy operation, so no Spark job will run
        
+# Call .count() to materialize the cache
+spark.table("dfVIEW").count()
+# It will first read files from disk. Spark reads 64MB at a time, hence file is divided in 13 partitions.
+# After cache(), file will be saved in memory in compressed format. Spark uses Tungston Binary formar and file is 
+# converted to collumnar compress data in memory.
+# for example 1.6 GB files will utilize only 620 MB in memory to store.
+
+# *** to utilize cached data ***
+# we will create a dataframe from cached table
+dfcached= spark.table("dfVIEW")
+dfcached.count()
+# NOTE that the full scan + count in memory takes < 1 second!, previoulsy it took 20 seconds to read file from disk
+# The 6 partitions are now cached in memory:  
+# Use the Spark UI to see the 6 partitions in memory: under Storage section
+# Now that our data has the correct date types for each column and it is correctly partitioned, let's write it down as a parquet file for future loading:
+# Parquet are much faster than CSV and JSON to read data        
+df.write.format('parquet').save('C:\Users\Gaurav\Downloads\fireServiceParquet\')
+# Now the directory should contain 6 .gz compressed Parquet files (one for each partition):
+                                
+# Here's how you can easily read the parquet file from S3 in the future:
+tempDF = spark.read.parquet('C:\Users\Gaurav\Downloads\fireServiceParquet\')
+tempDF.count()
+display(tempDF.limit(5))
+
+                            
+# ***SQL Queries ***
+# because I am working on local laptop, hence I can't directly run SQL command, but I need to use with sparkSQL                        
+spark.sql("SELECT count(*) FROM dfVIEW").show()  
+                            
+                            
+#If you look at Spark UI then you will see 3 stages , 1 skipped so only 2 stages ran.
+#2 stages have 7 tasks which were launched to run the count... 6 tasks to reach the data from each of the 6 partitions 
+# and do a pre-aggregation on each partition, then a final task to aggregate the count from all 6 tasks: 
+#Result of first stage is input to next stage , as those 6 task result in 354KB which is input for next task.
+                            
+      
+                            
+# **Q-5) Which neighborhood in SF generated the most calls last year?**
+ 
+spark.sql("SELECT `NeighborhoodDistrict`, count(`NeighborhoodDistrict`) AS Neighborhood_Count FROM dfVIEW WHERE year(`CallDateTS`) == '2015' GROUP BY `NeighborhoodDistrict` ORDER BY Neighborhood_Count DESC LIMIT 15");
+     
+# note that last stage uses 200 partitions! This is by default which is non-optimal, given that we only have ~1.6 GB of data and 3 slots.
+# Change the shuffle.partitions option to 6:
+# this SETTING means that anytime a shuffle happens, no of partitions which should be in dataframe is 200 by default.  
+                                                
+spark.conf.get("spark.sql.shuffle.partitions")
+#which is 200
+spark.conf.set("spark.sql.shuffle.partitions", 6)
+spark.conf.get("spark.sql.shuffle.partitions")
+# now its is 6
+
+# Re-run the same SQL query and notice the speed increase:
+
+spark.sql("SELECT `NeighborhoodDistrict`, count(`NeighborhoodDistrict`) AS Neighborhood_Count FROM dfVIEW WHERE year(`CallDateTS`) == '2015' GROUP BY `NeighborhoodDistrict` ORDER BY Neighborhood_Count DESC LIMIT 15");
+
+# SQL also has some handy commands like `DESC` (describe) to see the schema + data types for the table:
+
+# COMMAND ----------
+
+ spark.sql("DESC dfVIEW")
+                          
+# ***Spark Internals and SQL UI***
+# Catalyst Optimizer: which will take SQL query, or dataframe / dataset and generates logical plan, flows through logical & physical optimization
+# and finally generates RDD and runs code
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                                
 
 
