@@ -21,8 +21,11 @@ Spark can read from many different databases and file systems and run in various
 
 ![Spark Goal](http://curriculum-release.s3-website-us-west-2.amazonaws.com/wiki-book/book_intro/spark_goal.png)
 
-Although Spark supports four languages (Scala, Java, Python, R), tonight we will use Python. Broadly speaking, there are 2 APIs for interacting with Spark:
+Although Spark supports four languages (Scala, Java, Python, R), tonight we will use Python. 
+Broadly speaking, there are 2 APIs for interacting with Spark:
+
 DataFrames/SQL/Datasets: general, higher level API for users of Spark
 RDD: a lower level API for spark internals and advanced programming
+
 A Spark cluster is made of one Driver and many Executor JVMs (java virtual machines):
-![Spark_Architecture(https://training.databricks.com/databricks_guide/gentle_introduction/spark_cluster_tasks.png)]
+![Spark_Architecture](https://training.databricks.com/databricks_guide/gentle_introduction/spark_cluster_tasks.png)
