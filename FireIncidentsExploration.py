@@ -10,10 +10,6 @@
 #The entry point into all functionality in Spark 2.0 is the new SparkSession class:
 
 ```
->>> content.cache()
-```
-
-```
 spark
 <pyspark.sql.session.SparkSession object at 0x0000000005C0FC88>
 ```
