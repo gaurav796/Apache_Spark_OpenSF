@@ -5,13 +5,16 @@
 # Introduction to Fire Department Calls for Service
 # Note, you can also access the 1.6 GB of data directly from sfgov.org via this link: https://data.sfgov.org/Public-Safety/Fire-Department-Calls-for-Service/nuek-vuh3
 
-# Below commands are in iterative manner which I have used using **Pyspark** session
+# Below commands are in iterative manner which I have used using **Pyspark** session in local mode
 
 #The entry point into all functionality in Spark 2.0 is the new SparkSession class:
-
 ```
 spark
 <pyspark.sql.session.SparkSession object at 0x0000000005C0FC88>
 ```
 
+#Using the SparkSession, create a DataFrame from the CSV file by inferring the schema:
+```python
+fireServiceCallsDF = spark.read.csv('/mnt/sf_open_data/fire_dept_calls_for_service/Fire_Department_Calls_for_Service.csv', header=True, inferSchema=True)
+```
 
