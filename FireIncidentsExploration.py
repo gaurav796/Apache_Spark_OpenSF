@@ -8,10 +8,10 @@
 # Below commands are in iterative manner which I have used using **Pyspark** session in local mode
 
 #The entry point into all functionality in Spark 2.0 is the new SparkSession class:
-
+# **Analysis with PySpark DataFrames API**
 spark
 <pyspark.sql.session.SparkSession object at 0x0000000005C0FC88>
-
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, BooleanType
 
 #Using the SparkSession, create a DataFrame from the CSV file by inferring the schema:
 
@@ -106,10 +106,184 @@ df.select('Call Type').distinct().show(35, False)
 |Train / Rail Incident                       |
 +--------------------------------------------+
 
+# **Q-2) How many incidents of each call type were there?**
+#Note that .count() is actually a transformation here
+ df.select('Call Type').groupBy('Call Type').count().orderBy("count", ascending=False).show(100)
++--------------------+-------+
+|           Call Type|  count|
++--------------------+-------+
+|    Medical Incident|2901390|
+|      Structure Fire| 598794|
+|              Alarms| 478487|
+|   Traffic Collision| 183284|
+|               Other|  72516|
+|Citizen Assist / ...|  67921|
+|        Outside Fire|  52227|
+|        Vehicle Fire|  22025|
+|        Water Rescue|  21427|
+|Gas Leak (Natural...|  16389|
+|   Electrical Hazard|  12529|
+|Odor (Strange / U...|  12225|
+|Elevator / Escala...|  11701|
+|Smoke Investigati...|   9813|
+|          Fuel Spill|   5275|
+|              HazMat|   3768|
+|Industrial Accidents|   2776|
+|           Explosion|   2513|
+|  Aircraft Emergency|   1511|
+|       Assist Police|   1299|
+|   High Angle Rescue|   1147|
+|Train / Rail Inci...|   1121|
+|Watercraft in Dis...|    884|
+|Extrication / Ent...|    665|
+|           Oil Spill|    516|
+|Confined Space / ...|    467|
+|Mutual Aid / Assi...|    422|
+|         Marine Fire|    356|
+|  Suspicious Package|    295|
+|      Administrative|    262|
+|   Train / Rail Fire|     10|
+|Lightning Strike ...|      9|
++--------------------+-------+
+#Seems like the SF Fire department is called for medical incidents far more than any other type. Note that the above command took about 14 seconds to execute. In an upcoming section, we'll cache the data into memory for up to 100x speed increases.
+       
+       
+# ***Doing Date/Time Analysis*** 
+# **Q-3) How many years of Fire Service Calls is in the data file?**
+  
+# Notice that the date or time columns are currently being interpreted as strings, rather than date or time objects:      
+>>> df.printSchema()
+root
+ |-- Call Number: integer (nullable = true)
+ |-- Unit ID: string (nullable = true)
+ |-- Incident Number: integer (nullable = true)
+ |-- Call Type: string (nullable = true)
+ |-- Call Date: string (nullable = true)
+ |-- Watch Date: string (nullable = true)
+ |-- Received DtTm: string (nullable = true)
+ |-- Entry DtTm: string (nullable = true)
+ |-- Dispatch DtTm: string (nullable = true)
+ |-- Response DtTm: string (nullable = true)
+ |-- On Scene DtTm: string (nullable = true)
+ |-- Transport DtTm: string (nullable = true)
+ |-- Hospital DtTm: string (nullable = true)
+ |-- Call Final Disposition: string (nullable = true)
+ |-- Available DtTm: string (nullable = true)
+ |-- Address: string (nullable = true)
+ |-- City: string (nullable = true)
+ |-- Zipcode of Incident: integer (nullable = true)
+ |-- Battalion: string (nullable = true)
+ |-- Station Area: string (nullable = true)
+ |-- Box: string (nullable = true)
+ |-- Original Priority: string (nullable = true)
+ |-- Priority: string (nullable = true)
+ |-- Final Priority: integer (nullable = true)
+ |-- ALS Unit: boolean (nullable = true)
+ |-- Call Type Group: string (nullable = true)
+ |-- Number of Alarms: integer (nullable = true)
+ |-- Unit Type: string (nullable = true)
+ |-- Unit sequence in call dispatch: integer (nullable = true)
+ |-- Fire Prevention District: string (nullable = true)
+ |-- Supervisor District: string (nullable = true)
+ |-- Neighborhooods - Analysis Boundaries: string (nullable = true)
+ |-- Location: string (nullable = true)
+ |-- RowID: string (nullable = true)       
 
 
+# Let's use the unix_timestamp() function to convert the string into a timestamp:
+from pyspark.sql.functions import *
+# Note that PySpark uses the Java Simple Date Format patterns
+
+from_pattern1 = 'MM/dd/yyyy'
+to_pattern1 = 'yyyy-MM-dd'
+
+from_pattern2 = 'MM/dd/yyyy hh:mm:ss aa'
+to_pattern2 = 'MM/dd/yyyy hh:mm:ss aa'
 
 
+df = df \
+  .withColumn('CallDateTS', unix_timestamp(df['Call Date'], from_pattern1).cast("timestamp")) \
+  .drop('CallDate') \
+  .withColumn('WatchDateTS', unix_timestamp(df['Watch Date'], from_pattern1).cast("timestamp")) \
+  .drop('WatchDate') \
+  .withColumn('ReceivedDtTmTS', unix_timestamp(df['ReceivedDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('ReceivedDtTm') \
+  .withColumn('EntryDtTmTS', unix_timestamp(df['EntryDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('EntryDtTm') \
+  .withColumn('DispatchDtTmTS', unix_timestamp(df['DispatchDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('DispatchDtTm') \
+  .withColumn('ResponseDtTmTS', unix_timestamp(df['ResponseDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('ResponseDtTm') \
+  .withColumn('OnSceneDtTmTS', unix_timestamp(df['OnSceneDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('OnSceneDtTm') \
+  .withColumn('TransportDtTmTS', unix_timestamp(df['TransportDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('TransportDtTm') \
+  .withColumn('HospitalDtTmTS', unix_timestamp(df['HospitalDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('HospitalDtTm') \
+  .withColumn('AvailableDtTmTS', unix_timestamp(df['AvailableDtTm'], from_pattern2).cast("timestamp")) \
+  .drop('AvailableDtTm')  
+
+df.printSchema()
+
+# Notice that the formatting of the timestamps is now different:
+df.limit(5).show()
+
+# Finally calculate how many distinct years of data is in the CSV file:
+df.select(year('CallDateTS')).distinct().orderBy('year(CallDateTS)').show()
+
+ +----------------+  
+|year(CallDateTS)|  
++----------------+  
+|            2000|  
+|            2001|  
+|            2002|  
+|            2003|  
+|            2004|  
+|            2005|  
+|            2006|  
+|            2007|  
+|            2008|  
+|            2009|  
+|            2010|  
+|            2011|  
+|            2012|  
+|            2013|  
+|            2014|  
+|            2015|  
+|            2016|  
+|            2017|  
++----------------+  
+       
+# **Q-4) How many service calls were logged in the last 7 days?**
+
+# suppose today,is the 360  day of the year. Filter the DF down to just 2016 and days of year greater than 360:
+ 
+df.filter(year('CallDateTS') == '2016').filter(dayofyear('CallDateTS') >= 360).select(dayofyear('CallDateTS')).distinct().orderBy('dayofyear(CallDateTS)').show()
++---------------------+  
+|dayofyear(CallDateTS)|  
++---------------------+  
+|                  360|  
+|                  361|  
+|                  362|  
+|                  363|  
+|                  364|  
+|                  365|  
+|                  366|  
++---------------------+    
+       
+df.filter(year('CallDateTS') == '2016').filter(dayofyear('CallDateTS') >= 360).groupBy(dayofyear('CallDateTS')).count().orderBy('dayofyear(CallDateTS)').show()
++---------------------+-----+
+|dayofyear(CallDateTS)|count|
++---------------------+-----+
+|                  360|  719|
+|                  361|  745|
+|                  362|  767|
+|                  363|  884|
+|                  364|  829|
+|                  365|  912|
+|                  366|  852|
++---------------------+-----+
+       
 
 
 
