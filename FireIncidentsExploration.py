@@ -296,7 +296,8 @@ spark.catalog.cacheTable("dfVIEW")
        
 # Call .count() to materialize the cache
 spark.table("dfVIEW").count()
-# It will first read files from disk. Spark reads 64MB at a time, hence file is divided in 13 partitions.
+# It will first read files from disk. Spark reads maximum of 128 MB at a partition, hence 1.6BB file is divided in 13 partitions.
+       # as 1600*1024/ 128 = 12.8
 # After cache(), file will be saved in memory in compressed format. Spark uses Tungston Binary formar and file is 
 # converted to collumnar compress data in memory.
 # for example 1.6 GB files will utilize only 620 MB in memory to store.
